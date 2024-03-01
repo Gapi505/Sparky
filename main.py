@@ -1,7 +1,5 @@
 import yaml
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from dotenv import load_dotenv
-import torch
 import os
 import discord
 import time
@@ -11,41 +9,26 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 INACTIVITY_PERIOD = 60 * 2
 CHECK_PERIOD = 60
 
-model_name_or_path = "TheBloke/llama2_7b_chat_uncensored-GPTQ"
-# To use a different branch, change revision
-# For example: revision="main"
-model = AutoModelForCausalLM.from_pretrained(model_name_or_path,
-                                             device_map="auto",
-                                             trust_remote_code=True,
-                                             revision="main")
-
-tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, use_fast=True)
+from llama_cpp import Llama
+llm = Llama.from_pretrained(
+    repo_id="TheBloke/llama2_7b_chat_uncensored-GGUF",
+    filename="*Q4_K_M.gguf",
+    verbose=False,
+    n_gpu_layers=-1, # Uncomment to use GPU acceleration
+)
 
 prompt_template = """
-###{user}
+### {user}
 {user_prompt}
 
-###SPARKY:
+### SPARKY:
 """
 history_template = """
-###{user}
+### {user}
 {message}
 """
 
 # Inference can also be done using transformers' pipeline
-
-print("*** Pipeline:")
-pipe = pipeline(
-    "text-generation",
-    model=model,
-    tokenizer=tokenizer,
-    max_new_tokens=484,
-    do_sample=True,
-    temperature=0.7,
-    top_p=0.95,
-    top_k=40,
-    repetition_penalty=1.1
-)
 
 #print(pipe(prompt_template)[0]['generated_text'])
 
@@ -76,7 +59,7 @@ async def on_message(message):
     command = message.content.lower()
     if command.startswith('!sparky') or command.startswith('!s'):
 
-        message_strip_len = 7 if command.startswith('!sparky') else 2
+        message_strip_len = 8 if command.startswith('!sparky') else 3
         user_prompt = message.content[message_strip_len:]
 
         start_time = time.time()
@@ -89,7 +72,7 @@ async def on_message(message):
             if m.author == client.user:
                 history += history_template.format(user="SPARKY", message=m.content)
                 continue
-            history += history_template.format(user=str(m.author).upper(), message=m.content)
+            history += history_template.format(user="HUMAN "+str(m.author).upper(), message=m.content)
         end_time = time.time()
         print("history time:", end_time - start_time)
             
@@ -110,7 +93,15 @@ async def on_message(message):
         full_prompt += prompt_template.format(user=author.upper(), user_prompt=user_prompt)
 
         start_time = time.time()
-        response = pipe(full_prompt)[0]['generated_text']
+        response = llm(
+            full_prompt, # Prompt
+            max_tokens=486, # Generate up to 32 tokens, set to None to generate up to the end of the context window
+            stop=["### HUMAN", "\n"], # Stop generating just before the model would generate a new question
+            echo=True # Echo the prompt back in the output
+        ) # Generate a completion, can also call create_completion
+        print(response)
+        response = response["choices"][0]["text"]
+        print(response)
         filtered_response = response[len(full_prompt):]
         end_time = time.time()
         print("response time:", end_time - start_time)
