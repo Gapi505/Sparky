@@ -1,8 +1,9 @@
+from diffusers import AutoPipelineForText2Image
 import torch
-from diffusers import StableDiffusionPipeline
-pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", torch_dtype=torch.float16)
-pipe = pipe.to("cuda")
-prompt = "nice cars on speed"
-num_images = 1
-image = pipe(prompt).images[0]
-image.save(f'image.png')
+
+pipe = AutoPipelineForText2Image.from_pretrained("runwayml/stable-diffusion-v1-5", filename="*emaonly.safetensors",torch_dtype=torch.float16, variant="fp16")
+pipe.to("cuda")
+
+prompt = "A cinematic shot of a baby racoon wearing an intricate italian priest robe."
+
+image = pipe(prompt=prompt, num_inference_steps=1, guidance_scale=0.0).images[0].save("image.png")
